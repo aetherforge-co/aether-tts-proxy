@@ -5,5 +5,8 @@
   "description": "Server-side proxy that keeps the ElevenLabs API key off the browser for the AETHER dashboard.",
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@vercel/speed-insights": "^2.0.0"
   }
 }

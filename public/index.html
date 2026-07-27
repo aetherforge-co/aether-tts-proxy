@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER TTS Proxy</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 {
+            color: #0070f3;
+        }
+        .endpoint {
+            background: #f5f5f5;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        code {
+            background: #e1e1e1;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+    <h1>AETHER TTS Proxy</h1>
+    <p>
+        Server-side proxy that keeps the ElevenLabs API key off the browser for the AETHER dashboard.
+    </p>
+    
+    <h2>Available Endpoints</h2>
+    
+    <div class="endpoint">
+        <h3>POST /api/speak</h3>
+        <p>Proxies text-to-speech requests to ElevenLabs.</p>
+        <p><strong>Headers:</strong> <code>X-Aether-Secret</code> (required)</p>
+        <p><strong>Body:</strong></p>
+        <pre><code>{
+  "text": "Your text to convert to speech",
+  "voiceId": "21m00Tcm4TlvDq8ikWAM" // optional
+}</code></pre>
+    </div>
+    
+    <div class="endpoint">
+        <h3>POST /api/storefront-chat</h3>
+        <p>Proxies the Aetherforge storefront's AETHER widget to Google's Gemini API.</p>
+        <p><strong>Origin:</strong> Must be from an allowed domain</p>
+        <p><strong>Body:</strong></p>
+        <pre><code>{
+  "messages": [
+    { "role": "user", "content": "Your message" }
+  ]
+}</code></pre>
+    </div>
+    
+    <footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #eee; color: #666; font-size: 0.9rem;">
+        <p>Deployed on Vercel | <a href="https://github.com/aetherforge-co/aether-tts-proxy" style="color: #0070f3;">View on GitHub</a></p>
+    </footer>
+</body>
+</html>
