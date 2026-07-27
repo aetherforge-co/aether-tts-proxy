@@ -128,3 +128,4 @@ module.exports = async function handler(req, res) {
     res.status(502).json({ error: 'Could not reach the chat service.' });
   }
 };
+//v2
