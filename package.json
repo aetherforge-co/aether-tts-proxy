@@ -1,0 +1,9 @@
+{
+  "name": "aether-tts-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server-side proxy that keeps the ElevenLabs API key off the browser for the AETHER dashboard.",
+  "engines": {
+    "node": ">=18"
+  }
+}
