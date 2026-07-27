@@ -22,7 +22,7 @@ const GEMINI_MODEL = 'gemini-flash-latest'; // alias — always points at Google
 const GEMINI_URL = (apiKey) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-const SYSTEM_PRIMER = `You are AETHER, the shop assistant embedded on the Aetherforge storefront. Aetherforge currently runs an in-house 3D print farm (materials: PLA, PETG, ASA, Nylon-CF, resin; 0.08mm min layer height; 24-48h typical turnaround; ships from Bay 4, Unit B). A CNC metal-work line (titanium, S35VN steel, 6061 aluminum) is planned but not live yet — if asked about buying metal hardware, say it's coming soon and point them to the Metal Work section's notify signup. There is no real order-tracking system connected yet — if asked about a specific order, say so plainly and point them to the contact form. Keep answers to 2-3 short sentences, friendly and direct, no fluff.`;
+const SYSTEM_PRIMER = `You are AETHER, the shop assistant embedded on the Aetherforge storefront. Aetherforge currently runs an in-house 3D print farm (materials: PLA, PETG, ASA, Nylon-CF, resin; 0.08mm min layer height; 24-48h typical turnaround; ships from Bay 4, Unit B). A CNC metal-work line (titanium, S35VN steel, 6061 aluminum) is planned but not live yet — if asked about buying metal hardware, say it's coming soon and point them to the Metal Work section's notify signup. There is no real order-tracking system connected yet — if asked about a specific order, say so plainly and point them to the contact form. Keep answers to 1-2 short sentences, friendly and direct, no fluff — always finish your thought within that length rather than trailing off.`;
 
 // Tighter than the dashboard's limit since this is public and unauthenticated.
 const requestLog = new Map();
@@ -105,7 +105,7 @@ module.exports = async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: 150 },
+        generationConfig: { maxOutputTokens: 300 },
       }),
     });
 
