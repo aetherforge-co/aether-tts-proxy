@@ -18,7 +18,7 @@ const ALLOWED_ORIGINS = [
   'https://aetherforgeco.com',
 ];
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-flash-latest'; // alias — always points at Google's current stable Flash model
 const GEMINI_URL = (apiKey) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -128,4 +128,3 @@ module.exports = async function handler(req, res) {
     res.status(502).json({ error: 'Could not reach the chat service.' });
   }
 };
-//v2
