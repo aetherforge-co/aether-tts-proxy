@@ -311,6 +311,55 @@
 
 
 
+  /* Settings modal */
+  .settings-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.7);
+    display:none; align-items:center; justify-content:center; z-index:100;
+  }
+  .settings-overlay.open{ display:flex; }
+  .settings-panel{
+    width:360px; background:linear-gradient(180deg, var(--panel2), var(--panel));
+    border:1px solid var(--panel-border); border-radius:6px; padding:20px 22px;
+    position:relative;
+  }
+  .settings-panel::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg, transparent, rgba(214,71,60,.35), transparent);
+  }
+  .settings-header{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:var(--mono); font-size:12px; letter-spacing:2px; color:var(--text-primary);
+    margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--panel-border);
+  }
+  .settings-close{ cursor:pointer; color:var(--text-dim); font-size:18px; line-height:1; }
+  .settings-close:hover{ color:var(--red-bright); }
+  .settings-row{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;
+  }
+  .settings-label{ font-family:var(--mono); font-size:11px; color:var(--text-secondary); letter-spacing:.5px; }
+  .settings-toggle{
+    width:38px; height:20px; border-radius:10px; background:#0D0D0D; border:1px solid var(--panel-border);
+    position:relative; cursor:pointer; flex-shrink:0;
+  }
+  .settings-toggle .knob{
+    width:14px; height:14px; border-radius:50%; background:var(--text-dim);
+    position:absolute; top:2px; left:2px; transition:transform .15s ease, background .15s ease;
+  }
+  .settings-toggle.on{ border-color:var(--red); }
+  .settings-toggle.on .knob{ background:var(--red-bright); transform:translateX(18px); }
+  .settings-select, .settings-input{
+    background:#0D0D0D; border:1px solid var(--panel-border); border-radius:3px;
+    color:var(--text-primary); font-family:var(--mono); font-size:11px; padding:5px 8px;
+    outline:none; width:140px;
+  }
+  .settings-divider{ height:1px; background:var(--panel-border); margin:6px 0 16px; }
+  .settings-reset{
+    font-family:var(--mono); font-size:11px; letter-spacing:.5px; color:var(--red-bright);
+    border:1px solid rgba(214,71,60,.4); border-radius:4px; padding:9px; text-align:center;
+    cursor:pointer;
+  }
+  .settings-reset:hover{ background:rgba(214,71,60,.1); }
+
   ::-webkit-scrollbar{ display:none; }
 </style>
 </head>
@@ -334,7 +383,7 @@
     <div class="topbar-right">
       <div class="loc"><span class="slash">//</span><b>AETHERFORGE</b> · TX</div>
       <div class="gear" id="fullscreenBtn" title="Toggle fullscreen">⛶</div>
-      <div class="gear">⚙</div>
+      <div class="gear" id="settingsBtn" title="Settings">⚙</div>
     </div>
   </div>
 
@@ -437,6 +486,41 @@
     <div class="dock-send" id="sendBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg></div>
   </div>
 
+  <div class="settings-overlay" id="settingsOverlay">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <span><span class="slash">//</span>SETTINGS</span>
+        <div class="settings-close" id="settingsClose">×</div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-label">VOICE REPLIES</div>
+        <div class="settings-toggle" id="toggleVoice"><div class="knob"></div></div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">ALERT SOUND</div>
+        <div class="settings-toggle" id="toggleSound"><div class="knob"></div></div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">SCREEN DIM AFTER</div>
+        <select class="settings-select" id="idleMinutesSelect">
+          <option value="1">1 MIN</option>
+          <option value="3">3 MIN</option>
+          <option value="5">5 MIN</option>
+          <option value="10">10 MIN</option>
+          <option value="0">NEVER</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <div class="settings-label">STORE LABEL</div>
+        <input class="settings-input" id="storeLabelInput" type="text" placeholder="AETHERFORGE · TX" maxlength="30">
+      </div>
+
+      <div class="settings-divider"></div>
+      <div class="settings-reset" id="resetBtn">⚠ RESET ALL DASHBOARD DATA</div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -499,6 +583,75 @@ fsBtn.addEventListener('click', ()=>{
 document.addEventListener('fullscreenchange', ()=>{
   fsBtn.style.color = document.fullscreenElement ? 'var(--red-bright)' : '';
 });
+
+// ---------- Settings (persisted) ----------
+const SETTINGS_KEY = 'aether-settings';
+let settings = { voiceEnabled: true, soundEnabled: true, idleMinutes: 3, storeLabel: '' };
+
+async function loadSettings(){
+  try{
+    const res = await window.storage.get(SETTINGS_KEY);
+    if(res && res.value) settings = { ...settings, ...JSON.parse(res.value) };
+  }catch(e){ /* use defaults */ }
+  applySettingsToUI();
+  applyIdleMinutes();
+  applyStoreLabel();
+}
+async function saveSettings(){
+  try{ await window.storage.set(SETTINGS_KEY, JSON.stringify(settings)); }
+  catch(e){ console.error('settings save failed', e); }
+}
+function applySettingsToUI(){
+  document.getElementById('toggleVoice').classList.toggle('on', settings.voiceEnabled);
+  document.getElementById('toggleSound').classList.toggle('on', settings.soundEnabled);
+  document.getElementById('idleMinutesSelect').value = String(settings.idleMinutes);
+  document.getElementById('storeLabelInput').value = settings.storeLabel || '';
+}
+function applyStoreLabel(){
+  const loc = document.querySelector('.topbar-right .loc');
+  if(loc && settings.storeLabel){
+    loc.innerHTML = `<span class="slash">//</span><b>${settings.storeLabel}</b>`;
+  }
+}
+
+const settingsOverlay = document.getElementById('settingsOverlay');
+document.getElementById('settingsBtn').addEventListener('click', () => settingsOverlay.classList.add('open'));
+document.getElementById('settingsClose').addEventListener('click', () => settingsOverlay.classList.remove('open'));
+settingsOverlay.addEventListener('click', (e) => { if(e.target === settingsOverlay) settingsOverlay.classList.remove('open'); });
+
+document.getElementById('toggleVoice').addEventListener('click', function(){
+  settings.voiceEnabled = !settings.voiceEnabled;
+  this.classList.toggle('on', settings.voiceEnabled);
+  saveSettings();
+});
+document.getElementById('toggleSound').addEventListener('click', function(){
+  settings.soundEnabled = !settings.soundEnabled;
+  this.classList.toggle('on', settings.soundEnabled);
+  saveSettings();
+});
+document.getElementById('idleMinutesSelect').addEventListener('change', function(){
+  settings.idleMinutes = parseInt(this.value, 10);
+  saveSettings();
+  applyIdleMinutes();
+});
+document.getElementById('storeLabelInput').addEventListener('change', function(){
+  settings.storeLabel = this.value.trim();
+  saveSettings();
+  applyStoreLabel();
+});
+document.getElementById('resetBtn').addEventListener('click', async () => {
+  if(!confirm('Reset all dashboard data? This clears tasks, log history, goal, quick links, and Aether\'s memory. This cannot be undone.')) return;
+  try{
+    await window.storage.delete('aether-activity-log');
+    await window.storage.delete('aether-tasks');
+    await window.storage.delete('aether-goal');
+    await window.storage.delete('aether-quicklinks');
+    await window.storage.delete('aether-conversation');
+  }catch(e){ console.error('reset failed', e); }
+  location.reload();
+});
+
+loadSettings();
 
 // Point this at your deployed Stripe stats endpoint once it's live, e.g. "https://aetherforgeco.com/api/store-stats"
 const STORE_STATS_URL = 'https://aether-tts-proxy.vercel.app/api/store-stats';
@@ -605,6 +758,7 @@ const alertPool = [
 let currentAlerts = alertPool.slice(0,4);
 
 function playChime(){
+  if(!settings.soundEnabled) return;
   try{
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -1037,6 +1191,7 @@ function stopFakeTalking(){
 }
 
 async function speakReply(text){
+  if(!settings.voiceEnabled) return;
   if(SPEECH_PROXY_URL){
     try{
       const res = await fetch(SPEECH_PROXY_URL, {
@@ -1089,12 +1244,15 @@ document.getElementById('logExportBtn').addEventListener('click', ()=>{
 });
 
 // ---------- Burn-in protection ----------
-const IDLE_MS = 3 * 60 * 1000;
 let idleTimer;
+function applyIdleMinutes(){
+  resetIdle();
+}
 function resetIdle(){
   document.querySelector('.screen').classList.remove('dimmed');
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(()=> document.querySelector('.screen').classList.add('dimmed'), IDLE_MS);
+  if(!settings.idleMinutes) return; // 0 = never dim
+  idleTimer = setTimeout(()=> document.querySelector('.screen').classList.add('dimmed'), settings.idleMinutes * 60 * 1000);
 }
 ['mousemove','keydown','click','touchstart'].forEach(evt => window.addEventListener(evt, resetIdle));
 resetIdle();
