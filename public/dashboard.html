@@ -894,8 +894,6 @@ micBtn.addEventListener('click', ()=>{
 // ---------- Text-to-speech for Aether's replies ----------
 // Point this at your website's ElevenLabs proxy once it's live, e.g. "https://aetherforge.com/api/speak"
 const SPEECH_PROXY_URL = 'https://aether-tts-proxy.vercel.app/api/speak';
-// Paste the AETHER_PROXY_SECRET value from Vercel here before deploying — it must match exactly.
-const AETHER_PROXY_SECRET = 'PASTE_YOUR_AETHER_PROXY_SECRET_HERE';
 
 // ---------- Orb voice visualizer ----------
 // Passive by default; only animates while Aether is actually speaking.
@@ -959,10 +957,7 @@ async function speakReply(text){
     try{
       const res = await fetch(SPEECH_PROXY_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Aether-Secret': AETHER_PROXY_SECRET
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
       if(!res.ok) throw new Error('proxy responded ' + res.status);
