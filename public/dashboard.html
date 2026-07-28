@@ -485,7 +485,7 @@ function tickUptime(){
 tickUptime(); setInterval(tickUptime, 1000);
 
 // Point this at your deployed Stripe stats endpoint once it's live, e.g. "https://aetherforgeco.com/api/store-stats"
-const STORE_STATS_URL = ''; // leave blank to keep using simulated numbers
+const STORE_STATS_URL = 'https://aether-tts-proxy.vercel.app/api/store-stats';
 
 let revenue = 4218, ordersToday = 37;
 const seenOrderKeys = new Set();
@@ -834,7 +834,7 @@ micBtn.addEventListener('click', ()=>{
 
 // ---------- Text-to-speech for Aether's replies ----------
 // Point this at your website's ElevenLabs proxy once it's live, e.g. "https://aetherforge.com/api/speak"
-const SPEECH_PROXY_URL = ''; // leave blank to use browser voice only
+const SPEECH_PROXY_URL = 'https://aether-tts-proxy.vercel.app/api/speak';
 
 async function speakReply(text){
   if(SPEECH_PROXY_URL){
