@@ -438,6 +438,30 @@
 </div>
 
 <script>
+// window.storage only exists inside Claude's artifact preview. Once hosted on your
+// own site it's undefined, so this shim backs the same get/set interface with real
+// browser localStorage — everything else in the file works unchanged.
+if(!window.storage){
+  window.storage = {
+    async get(key){
+      try{
+        const raw = localStorage.getItem('aether:' + key);
+        return raw === null ? null : { key, value: raw };
+      }catch(e){ return null; }
+    },
+    async set(key, value){
+      try{
+        localStorage.setItem('aether:' + key, value);
+        return { key, value };
+      }catch(e){ return null; }
+    },
+    async delete(key){
+      try{ localStorage.removeItem('aether:' + key); return { key, deleted:true }; }
+      catch(e){ return null; }
+    }
+  };
+}
+
 function tickClock(){
   const now = new Date();
   document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {hour12:false});
@@ -912,6 +936,8 @@ async function saveConversation(){
   }catch(e){ console.error('conversation save failed', e); }
 }
 
+const ASK_PROXY_URL = 'https://aether-tts-proxy.vercel.app/api/ask';
+
 async function askAether(userText){
   try{
     const messages = [
@@ -920,14 +946,14 @@ async function askAether(userText){
       ...conversation,
       { role: "user", content: userText }
     ];
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(ASK_PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 300, messages })
+      body: JSON.stringify({ messages })
     });
+    if(!response.ok) throw new Error('proxy responded ' + response.status);
     const data = await response.json();
-    const text = (data.content || []).map(b => b.type === "text" ? b.text : "").join("\n").trim();
-    return text || "No response came back — try again.";
+    return data.text || "No response came back — try again.";
   }catch(err){
     console.error(err);
     return "Couldn't reach Aether's core just now — check your connection and try again.";
