@@ -86,7 +86,7 @@ module.exports = async function handler(req, res) {
     res.status(400).json({ error: '"text" is required.' });
     return;
   }
-  if (text.length > 1000) {
+  if (text.length > 4000) {
     res.status(400).json({ error: 'Text is too long (max 1000 characters).' });
     return;
   }
