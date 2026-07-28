@@ -212,16 +212,8 @@
   .orb-ring{ position:absolute; border-radius:50%; border:1px solid; opacity:.55; }
   .orb-ring.r1{ width:280px; height:280px; border-color:rgba(255,255,255,.18); animation:spin 22s linear infinite; }
   .orb-ring.r2{ width:220px; height:220px; border-color:rgba(214,71,60,.22); animation:spin 16s linear infinite reverse; }
-  .orb-ring.r3{ width:160px; height:160px; border-color:rgba(255,255,255,.3); opacity:.3; transition:transform .08s linear, opacity .08s linear; }
   @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
-  .orb-core{
-    width:110px; height:110px; border-radius:50%;
-    background:radial-gradient(circle at 35% 30%, #FFFFFF 0%, #E5E5E3 35%, #A6A6A4 70%, #3A3A3A 100%);
-    box-shadow:0 0 60px 10px rgba(255,255,255,.25), 0 0 110px 26px rgba(214,71,60,.14);
-    display:flex; align-items:center; justify-content:center;
-    transition:transform .08s linear, box-shadow .08s linear;
-  }
-  .orb-core .glyph{ font-family:var(--display); font-size:13px; letter-spacing:3px; color:rgba(20,20,20,.75); }
+  .sun-canvas{ border-radius:50%; display:block; }
 
   /* CAD crosshair ticks around orb */
   .crosshair{ position:absolute; inset:0; pointer-events:none; }
@@ -385,8 +377,7 @@
         </div>
         <div class="orb-ring r1"></div>
         <div class="orb-ring r2"></div>
-        <div class="orb-ring r3"></div>
-        <div class="orb-core"><div class="glyph">AF</div></div>
+        <canvas id="sunCanvas" class="sun-canvas"></canvas>
       </div>
       <div class="hub-title">AETHER</div>
       <div class="hub-status"><div class="dot"></div>[MONITORING AETHERFORGE] · AWAITING LIVE FEED</div>
@@ -895,26 +886,88 @@ micBtn.addEventListener('click', ()=>{
 // Point this at your website's ElevenLabs proxy once it's live, e.g. "https://aetherforge.com/api/speak"
 const SPEECH_PROXY_URL = 'https://aether-tts-proxy.vercel.app/api/speak';
 
-// ---------- Orb voice visualizer ----------
-// Passive by default; only animates while Aether is actually speaking.
-const orbCore = document.querySelector('.orb-core');
-const orbRingR3 = document.querySelector('.orb-ring.r3');
+// ---------- The Sun (canvas-rendered, always alive; flares brighter while Aether speaks) ----------
+let sunLevel = 0.15; // idle ambient level; rises toward 1 while speaking
 
-function setOrbLevel(level){ // level: 0..1
-  const scale = 1 + level * 0.22;
-  orbCore.style.transform = `scale(${scale})`;
-  orbCore.style.boxShadow =
-    `0 0 ${60 + level*90}px ${10 + level*22}px rgba(255,255,255,${0.25 + level*0.35}), ` +
-    `0 0 ${110 + level*70}px ${26 + level*18}px rgba(214,71,60,${0.14 + level*0.26})`;
-  orbRingR3.style.transform = `scale(${1 + level * 0.14})`;
-  orbRingR3.style.opacity = 0.3 + level * 0.55;
+function setOrbLevel(level){ sunLevel = 0.15 + Math.min(1, level) * 0.85; }
+function resetOrbPassive(){ sunLevel = 0.15; }
+
+function initSun(){
+  const canvas = document.getElementById('sunCanvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const size = 190;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  ctx.scale(dpr, dpr);
+
+  const cx = size / 2, cy = size / 2, r = size * 0.42;
+  let t = 0;
+
+  const spots = Array.from({ length: 7 }, () => ({
+    angle: Math.random() * Math.PI * 2,
+    speed: 0.12 + Math.random() * 0.22,
+    orbit: r * (0.25 + Math.random() * 0.45),
+    size: r * (0.28 + Math.random() * 0.3),
+    phase: Math.random() * Math.PI * 2,
+  }));
+
+  function draw(){
+    t += 0.016;
+    ctx.clearRect(0, 0, size, size);
+
+    // Corona glow behind the disc, intensifies with voice level
+    canvas.style.filter = `drop-shadow(0 0 ${18 + sunLevel*40}px rgba(255,150,60,${0.35 + sunLevel*0.35})) drop-shadow(0 0 ${40 + sunLevel*70}px rgba(214,71,60,${0.18 + sunLevel*0.25}))`;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Base plasma disc
+    const base = ctx.createRadialGradient(cx - r*0.2, cy - r*0.25, r*0.1, cx, cy, r);
+    base.addColorStop(0, '#FFF6D8');
+    base.addColorStop(0.35, '#FFD066');
+    base.addColorStop(0.68, '#FF9A2E');
+    base.addColorStop(1, '#C8402F');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
+
+    // Turbulent hotspots drifting across the surface, brighter/larger while speaking
+    ctx.globalCompositeOperation = 'lighter';
+    spots.forEach(s => {
+      s.angle += s.speed * 0.016;
+      const wobble = Math.sin(t * 0.6 + s.phase) * 0.3 + 0.7;
+      const px = cx + Math.cos(s.angle) * s.orbit * wobble;
+      const py = cy + Math.sin(s.angle * 1.15) * s.orbit * wobble;
+      const rad = s.size * (0.65 + sunLevel * 0.55);
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, rad);
+      grad.addColorStop(0, `rgba(255,235,170,${0.30 + sunLevel*0.3})`);
+      grad.addColorStop(0.55, `rgba(255,150,60,${0.16 + sunLevel*0.18})`);
+      grad.addColorStop(1, 'rgba(255,90,40,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, py, rad, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Subtle limb darkening for a spherical read
+    const limb = ctx.createRadialGradient(cx, cy, r*0.7, cx, cy, r);
+    limb.addColorStop(0, 'rgba(0,0,0,0)');
+    limb.addColorStop(1, 'rgba(80,15,10,0.35)');
+    ctx.fillStyle = limb;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+  draw();
 }
-function resetOrbPassive(){
-  orbCore.style.transform = '';
-  orbCore.style.boxShadow = '';
-  orbRingR3.style.transform = '';
-  orbRingR3.style.opacity = '';
-}
+initSun();
 
 // Real amplitude analysis of the actual ElevenLabs audio — returns a stop function.
 function startAudioVisualizer(audioEl){
