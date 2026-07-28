@@ -859,13 +859,18 @@ micBtn.addEventListener('click', ()=>{
 // ---------- Text-to-speech for Aether's replies ----------
 // Point this at your website's ElevenLabs proxy once it's live, e.g. "https://aetherforge.com/api/speak"
 const SPEECH_PROXY_URL = 'https://aether-tts-proxy.vercel.app/api/speak';
+// Paste the AETHER_PROXY_SECRET value from Vercel here before deploying — it must match exactly.
+const AETHER_PROXY_SECRET = '4LGKwn7F5g83szgGfDi4g2BQaUwEFuuiF9';
 
 async function speakReply(text){
   if(SPEECH_PROXY_URL){
     try{
       const res = await fetch(SPEECH_PROXY_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Aether-Secret': AETHER_PROXY_SECRET
+        },
         body: JSON.stringify({ text })
       });
       if(!res.ok) throw new Error('proxy responded ' + res.status);
@@ -887,7 +892,6 @@ async function speakReply(text){
     speechSynthesis.speak(utter);
   }catch(e){ console.error('speech synthesis failed', e); }
 }
-
 // ---------- Working Clear / Export ----------
 document.getElementById('logClearBtn').addEventListener('click', async ()=>{
   logEntries = [{tag:'System', text:'Log cleared.'}];
