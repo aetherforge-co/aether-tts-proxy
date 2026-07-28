@@ -213,7 +213,7 @@
   .orb-ring.r1{ width:280px; height:280px; border-color:rgba(255,255,255,.18); animation:spin 22s linear infinite; }
   .orb-ring.r2{ width:220px; height:220px; border-color:rgba(214,71,60,.22); animation:spin 16s linear infinite reverse; }
   @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
-  .sun-canvas{ border-radius:50%; display:block; }
+  .sun-canvas{ border-radius:50%; display:block; will-change:filter; }
 
   /* CAD crosshair ticks around orb */
   .crosshair{ position:absolute; inset:0; pointer-events:none; }
@@ -615,7 +615,7 @@ function addRandomAlert(){
   renderAlertsList();
   if(entry.c === 'crit') playChime();
 }
-setInterval(addRandomAlert, 15000);
+setTimeout(() => setInterval(addRandomAlert, 15000), 4000);
 
 const products = ['Ember Lantern','Aether Compass','Forge-Iron Ring','Rune Candle Set','Copper Flask','Obsidian Coaster Set'];
 const cities = ['Austin, TX','Denver, CO','Portland, OR','Nashville, TN','Boise, ID','Raleigh, NC'];
@@ -854,8 +854,7 @@ async function speedTest(){
     document.getElementById('netUpVal').textContent = 'ERR';
   }
 }
-speedTest();
-setInterval(speedTest, 8000);
+setTimeout(() => { speedTest(); setInterval(speedTest, 40000); }, 2500);
 
 // ---------- Voice input (mic button) ----------
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -896,15 +895,16 @@ function initSun(){
   const canvas = document.getElementById('sunCanvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
-  const size = 190;
+  const canvasSize = 280; // drawing area — bigger than the disc so flares have room to arc outward
+  const discR = 190 * 0.42; // sun disc radius stays the same visual size as before
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  canvas.style.width = size + 'px';
-  canvas.style.height = size + 'px';
+  canvas.width = canvasSize * dpr;
+  canvas.height = canvasSize * dpr;
+  canvas.style.width = canvasSize + 'px';
+  canvas.style.height = canvasSize + 'px';
   ctx.scale(dpr, dpr);
 
-  const cx = size / 2, cy = size / 2, r = size * 0.42;
+  const cx = canvasSize / 2, cy = canvasSize / 2, r = discR;
   let t = 0;
 
   const spots = Array.from({ length: 7 }, () => ({
@@ -915,12 +915,25 @@ function initSun(){
     phase: Math.random() * Math.PI * 2,
   }));
 
-  function draw(){
-    t += 0.016;
-    ctx.clearRect(0, 0, size, size);
+  let frameCount = 0;
+  let lastFrameTime = 0;
+  const FRAME_INTERVAL = 1000 / 30; // cap at ~30fps — smooth to the eye, lighter on the GPU
 
-    // Corona glow behind the disc, intensifies with voice level
-    canvas.style.filter = `drop-shadow(0 0 ${18 + sunLevel*40}px rgba(255,150,60,${0.35 + sunLevel*0.35})) drop-shadow(0 0 ${40 + sunLevel*70}px rgba(214,71,60,${0.18 + sunLevel*0.25}))`;
+  function draw(now){
+    if(now - lastFrameTime < FRAME_INTERVAL){
+      requestAnimationFrame(draw);
+      return;
+    }
+    lastFrameTime = now;
+    frameCount++;
+    t += 0.016;
+    ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+    // Corona glow behind the disc — recomputing this every frame is one of the most
+    // expensive things a browser does, so it only updates every 4th frame.
+    if(frameCount % 4 === 0){
+      canvas.style.filter = `drop-shadow(0 0 ${18 + sunLevel*40}px rgba(255,150,60,${0.35 + sunLevel*0.35})) drop-shadow(0 0 ${40 + sunLevel*70}px rgba(214,71,60,${0.18 + sunLevel*0.25}))`;
+    }
 
     ctx.save();
     ctx.beginPath();
@@ -934,7 +947,7 @@ function initSun(){
     base.addColorStop(0.68, '#FF9A2E');
     base.addColorStop(1, '#C8402F');
     ctx.fillStyle = base;
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
 
     // Turbulent hotspots drifting across the surface, brighter/larger while speaking
     ctx.globalCompositeOperation = 'lighter';
@@ -960,12 +973,12 @@ function initSun(){
     limb.addColorStop(0, 'rgba(0,0,0,0)');
     limb.addColorStop(1, 'rgba(80,15,10,0.35)');
     ctx.fillStyle = limb;
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
 
     ctx.restore();
     requestAnimationFrame(draw);
   }
-  draw();
+  requestAnimationFrame(draw);
 }
 initSun();
 
