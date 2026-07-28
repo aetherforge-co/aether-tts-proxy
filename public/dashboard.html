@@ -27,9 +27,12 @@
   html,body{
     width:100%; height:100%;
     background:
+      radial-gradient(circle, rgba(255,255,255,.09) 1px, transparent 1.2px) 0 0 / 26px 26px,
+      radial-gradient(circle, rgba(214,71,60,.07) 1px, transparent 1.2px) 13px 13px / 26px 26px,
       radial-gradient(ellipse 900px 500px at 50% 8%, rgba(214,71,60,.08) 0%, transparent 60%),
       radial-gradient(ellipse 700px 500px at 90% 90%, rgba(255,255,255,.03) 0%, transparent 55%),
       var(--bg);
+    background-blend-mode: screen, screen, normal, normal, normal;
     color:var(--text-primary);
     font-family:var(--sans);
     overflow:hidden;
@@ -218,8 +221,8 @@
   }
   .orb-wrap{ position:relative; width:280px; height:280px; display:flex; align-items:center; justify-content:center; }
   .orb-ring{ position:absolute; border-radius:50%; border:1px solid; opacity:.55; }
-  .orb-ring.r1{ width:280px; height:280px; border-color:rgba(255,255,255,.18); animation:spin 22s linear infinite; }
-  .orb-ring.r2{ width:220px; height:220px; border-color:rgba(214,71,60,.22); animation:spin 16s linear infinite reverse; }
+  .orb-ring.r1{ width:280px; height:280px; border-color:rgba(255,255,255,.18); animation:spin 14s linear infinite; }
+  .orb-ring.r2{ width:220px; height:220px; border-color:rgba(214,71,60,.22); animation:spin 10s linear infinite reverse; }
   @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
   .sun-canvas{ border-radius:50%; display:block; will-change:filter; }
 
@@ -924,7 +927,7 @@ function initSun(){
 
   const spots = Array.from({ length: 7 }, () => ({
     angle: Math.random() * Math.PI * 2,
-    speed: 0.12 + Math.random() * 0.22,
+    speed: 0.22 + Math.random() * 0.34,
     orbit: r * (0.25 + Math.random() * 0.45),
     size: r * (0.28 + Math.random() * 0.3),
     phase: Math.random() * Math.PI * 2,
@@ -932,7 +935,7 @@ function initSun(){
 
   let frameCount = 0;
   let lastFrameTime = 0;
-  const FRAME_INTERVAL = 1000 / 30; // cap at ~30fps — smooth to the eye, lighter on the GPU
+  const FRAME_INTERVAL = 1000 / 60; // full 60fps for maximum smoothness
 
   function draw(now){
     if(now - lastFrameTime < FRAME_INTERVAL){
@@ -947,7 +950,7 @@ function initSun(){
     // Corona glow behind the disc — recomputing this every frame is one of the most
     // expensive things a browser does, so it only updates every 4th frame.
     if(frameCount % 4 === 0){
-      canvas.style.filter = `drop-shadow(0 0 ${18 + sunLevel*40}px rgba(255,150,60,${0.35 + sunLevel*0.35})) drop-shadow(0 0 ${40 + sunLevel*70}px rgba(214,71,60,${0.18 + sunLevel*0.25}))`;
+      canvas.style.filter = `drop-shadow(0 0 ${18 + sunLevel*40}px rgba(255,255,255,${0.35 + sunLevel*0.35})) drop-shadow(0 0 ${40 + sunLevel*70}px rgba(160,160,160,${0.18 + sunLevel*0.25}))`;
     }
 
     ctx.save();
@@ -957,10 +960,10 @@ function initSun(){
 
     // Base plasma disc
     const base = ctx.createRadialGradient(cx - r*0.2, cy - r*0.25, r*0.1, cx, cy, r);
-    base.addColorStop(0, '#FFF6D8');
-    base.addColorStop(0.35, '#FFD066');
-    base.addColorStop(0.68, '#FF9A2E');
-    base.addColorStop(1, '#C8402F');
+    base.addColorStop(0, '#FFFFFF');
+    base.addColorStop(0.35, '#E8E8E8');
+    base.addColorStop(0.68, '#8C8C8C');
+    base.addColorStop(1, '#1A1A1A');
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, canvasSize, canvasSize);
 
@@ -968,14 +971,14 @@ function initSun(){
     ctx.globalCompositeOperation = 'lighter';
     spots.forEach(s => {
       s.angle += s.speed * 0.016;
-      const wobble = Math.sin(t * 0.6 + s.phase) * 0.3 + 0.7;
+      const wobble = Math.sin(t * 1.1 + s.phase) * 0.4 + 0.75;
       const px = cx + Math.cos(s.angle) * s.orbit * wobble;
       const py = cy + Math.sin(s.angle * 1.15) * s.orbit * wobble;
       const rad = s.size * (0.65 + sunLevel * 0.55);
       const grad = ctx.createRadialGradient(px, py, 0, px, py, rad);
-      grad.addColorStop(0, `rgba(255,235,170,${0.30 + sunLevel*0.3})`);
-      grad.addColorStop(0.55, `rgba(255,150,60,${0.16 + sunLevel*0.18})`);
-      grad.addColorStop(1, 'rgba(255,90,40,0)');
+      grad.addColorStop(0, `rgba(255,255,255,${0.30 + sunLevel*0.3})`);
+      grad.addColorStop(0.55, `rgba(200,200,200,${0.16 + sunLevel*0.18})`);
+      grad.addColorStop(1, 'rgba(120,120,120,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(px, py, rad, 0, Math.PI * 2);
@@ -986,7 +989,7 @@ function initSun(){
     // Subtle limb darkening for a spherical read
     const limb = ctx.createRadialGradient(cx, cy, r*0.7, cx, cy, r);
     limb.addColorStop(0, 'rgba(0,0,0,0)');
-    limb.addColorStop(1, 'rgba(80,15,10,0.35)');
+    limb.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = limb;
     ctx.fillRect(0, 0, canvasSize, canvasSize);
 
