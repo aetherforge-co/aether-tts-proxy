@@ -212,17 +212,15 @@
   .orb-ring{ position:absolute; border-radius:50%; border:1px solid; opacity:.55; }
   .orb-ring.r1{ width:280px; height:280px; border-color:rgba(255,255,255,.18); animation:spin 22s linear infinite; }
   .orb-ring.r2{ width:220px; height:220px; border-color:rgba(214,71,60,.22); animation:spin 16s linear infinite reverse; }
-  .orb-ring.r3{ width:160px; height:160px; border-color:rgba(255,255,255,.3); animation:pulse-ring 3s ease-in-out infinite; }
+  .orb-ring.r3{ width:160px; height:160px; border-color:rgba(255,255,255,.3); opacity:.3; transition:transform .08s linear, opacity .08s linear; }
   @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
-  @keyframes pulse-ring{ 0%,100%{transform:scale(1); opacity:.4;} 50%{transform:scale(1.06); opacity:.75;} }
   .orb-core{
     width:110px; height:110px; border-radius:50%;
     background:radial-gradient(circle at 35% 30%, #FFFFFF 0%, #E5E5E3 35%, #A6A6A4 70%, #3A3A3A 100%);
     box-shadow:0 0 60px 10px rgba(255,255,255,.25), 0 0 110px 26px rgba(214,71,60,.14);
-    animation:breathe 4s ease-in-out infinite;
     display:flex; align-items:center; justify-content:center;
+    transition:transform .08s linear, box-shadow .08s linear;
   }
-  @keyframes breathe{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
   .orb-core .glyph{ font-family:var(--display); font-size:13px; letter-spacing:3px; color:rgba(20,20,20,.75); }
 
   /* CAD crosshair ticks around orb */
@@ -899,6 +897,63 @@ const SPEECH_PROXY_URL = 'https://aether-tts-proxy.vercel.app/api/speak';
 // Paste the AETHER_PROXY_SECRET value from Vercel here before deploying — it must match exactly.
 const AETHER_PROXY_SECRET = 'PASTE_YOUR_AETHER_PROXY_SECRET_HERE';
 
+// ---------- Orb voice visualizer ----------
+// Passive by default; only animates while Aether is actually speaking.
+const orbCore = document.querySelector('.orb-core');
+const orbRingR3 = document.querySelector('.orb-ring.r3');
+
+function setOrbLevel(level){ // level: 0..1
+  const scale = 1 + level * 0.22;
+  orbCore.style.transform = `scale(${scale})`;
+  orbCore.style.boxShadow =
+    `0 0 ${60 + level*90}px ${10 + level*22}px rgba(255,255,255,${0.25 + level*0.35}), ` +
+    `0 0 ${110 + level*70}px ${26 + level*18}px rgba(214,71,60,${0.14 + level*0.26})`;
+  orbRingR3.style.transform = `scale(${1 + level * 0.14})`;
+  orbRingR3.style.opacity = 0.3 + level * 0.55;
+}
+function resetOrbPassive(){
+  orbCore.style.transform = '';
+  orbCore.style.boxShadow = '';
+  orbRingR3.style.transform = '';
+  orbRingR3.style.opacity = '';
+}
+
+// Real amplitude analysis of the actual ElevenLabs audio — returns a stop function.
+function startAudioVisualizer(audioEl){
+  try{
+    const ctx = window.__aetherAudioCtx || (window.__aetherAudioCtx = new (window.AudioContext || window.webkitAudioContext)());
+    const source = ctx.createMediaElementSource(audioEl);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let raf;
+    function loop(){
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((a,b) => a+b, 0) / data.length / 255;
+      setOrbLevel(avg);
+      raf = requestAnimationFrame(loop);
+    }
+    loop();
+    return () => { cancelAnimationFrame(raf); resetOrbPassive(); };
+  }catch(e){
+    console.error('audio visualizer failed', e);
+    return () => resetOrbPassive();
+  }
+}
+
+// Approximated "talking" motion for the browser-voice fallback (no real waveform access).
+let fakeTalkInterval = null;
+function startFakeTalking(){
+  stopFakeTalking();
+  fakeTalkInterval = setInterval(() => setOrbLevel(0.2 + Math.random()*0.6), 90);
+}
+function stopFakeTalking(){
+  if(fakeTalkInterval){ clearInterval(fakeTalkInterval); fakeTalkInterval = null; }
+  resetOrbPassive();
+}
+
 async function speakReply(text){
   if(SPEECH_PROXY_URL){
     try{
@@ -914,8 +969,10 @@ async function speakReply(text){
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      const stopViz = startAudioVisualizer(audio);
       audio.play();
-      audio.onended = () => URL.revokeObjectURL(url);
+      audio.onended = () => { URL.revokeObjectURL(url); stopViz(); };
+      audio.onerror = () => { URL.revokeObjectURL(url); stopViz(); };
       return;
     }catch(err){
       console.error('ElevenLabs proxy failed, falling back to browser voice', err);
@@ -926,6 +983,9 @@ async function speakReply(text){
     speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 1.0; utter.pitch = 0.85;
+    utter.onstart = startFakeTalking;
+    utter.onend = stopFakeTalking;
+    utter.onerror = stopFakeTalking;
     speechSynthesis.speak(utter);
   }catch(e){ console.error('speech synthesis failed', e); }
 }
