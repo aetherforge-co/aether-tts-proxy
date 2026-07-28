@@ -193,12 +193,20 @@
   .ql-btn .dot{ color:var(--red); margin-right:4px; }
 
   /* Order locations */
-  .locations-card .loc-row{ display:flex; align-items:center; gap:10px; margin-bottom:11px; }
-  .locations-card .loc-row .name{ font-size:12px; color:var(--text-secondary); width:64px; flex-shrink:0;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--mono); letter-spacing:.5px; }
-  .locations-card .loc-track{ flex:1; height:7px; background:#0D0D0D; border-radius:3px; overflow:hidden; border:1px solid var(--panel-border); }
-  .locations-card .loc-fill{ height:100%; background:var(--red); }
-  .locations-card .loc-row .val{ font-family:var(--mono); font-size:10px; color:var(--text-dim); width:52px; text-align:right; }
+  /* Recent orders with thumbnail + customer info */
+  .orders-card .order-row{ display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+  .orders-card .order-thumb{
+    width:34px; height:34px; border-radius:4px; object-fit:cover; flex-shrink:0;
+    border:1px solid var(--panel-border); background:#0D0D0D;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:9px; color:var(--text-dim);
+  }
+  .orders-card .order-info{ flex:1; min-width:0; }
+  .orders-card .order-info .prod{ font-size:11.5px; color:var(--text-primary); font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .orders-card .order-info .cust{ font-size:9.5px; color:var(--text-dim); font-family:var(--mono);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .orders-card .order-amt{ font-family:var(--mono); font-size:11px; color:var(--red-bright); flex-shrink:0; }
   .hub-ticker #healthScore.good{ color:var(--red-bright); }
   .hub-ticker #healthScore.warn{ color:#E8C24C; }
   .hub-ticker #healthScore.bad{ color:var(--red); }
@@ -360,9 +368,9 @@
         <div class="task-list" id="taskList"></div>
       </div>
 
-      <div class="card locations-card">
-        <div class="card-label"><span class="slash">//</span>ORDER LOCATIONS <span class="icon">◎</span></div>
-        <div id="locationsList"></div>
+      <div class="card orders-card">
+        <div class="card-label"><span class="slash">//</span>RECENT ORDERS <span class="icon">▤</span></div>
+        <div id="ordersList"></div>
       </div>
     </div>
 
@@ -495,26 +503,34 @@ const STORE_STATS_URL = 'https://aether-tts-proxy.vercel.app/api/store-stats';
 let revenue = 4218, ordersToday = 37;
 const seenOrderKeys = new Set();
 
-const fallbackLocations = [
-  {location:'TX', revenue: 1240}, {location:'CA', revenue: 860}, {location:'CO', revenue: 540},
-  {location:'OR', revenue: 410}, {location:'NC', revenue: 300}
+const fallbackOrders = [
+  {productName:'Ember Lantern', customerName:'J. Whitfield', location:'TX', amount:64, productImage:null},
+  {productName:'Aether Compass', customerName:'M. Torres', location:'CO', amount:89, productImage:null},
+  {productName:'Forge-Iron Ring', customerName:'S. Cole', location:'CA', amount:112, productImage:null},
 ];
 
-function renderLocations(locations){
-  const list = document.getElementById('locationsList');
-  if(!locations || locations.length === 0){
+function renderOrdersList(orders){
+  const list = document.getElementById('ordersList');
+  if(!orders || orders.length === 0){
     list.innerHTML = `<div style="color:var(--text-dim); font-size:11px; font-family:var(--mono);">NO ORDERS YET TODAY</div>`;
     return;
   }
-  const max = Math.max(...locations.map(l => l.revenue), 1);
-  list.innerHTML = locations.map(l => {
-    const pct = Math.max(4, Math.round((l.revenue / max) * 100));
-    return `<div class="loc-row">
-      <div class="name">${l.location}</div>
-      <div class="loc-track"><div class="loc-fill" style="width:${pct}%"></div></div>
-      <div class="val">$${Math.round(l.revenue)}</div>
+  list.innerHTML = orders.slice(0, 5).map(o => {
+    const initials = (o.productName || '?').trim().slice(0, 2).toUpperCase();
+    const thumb = o.productImage
+      ? `<img class="order-thumb" src="${o.productImage}" alt="">`
+      : `<div class="order-thumb">${initials}</div>`;
+    const custLine = [o.customerName, o.location].filter(Boolean).join(' · ');
+    return `<div class="order-row">
+      ${thumb}
+      <div class="order-info">
+        <div class="prod">${o.productName || 'Order'}</div>
+        <div class="cust">${custLine || 'Customer'}</div>
+      </div>
+      <div class="order-amt">$${Math.round(o.amount || 0)}</div>
     </div>`;
   }).join('');
+}
 }
 
 function renderHealthScore(score){
@@ -543,7 +559,7 @@ function simulateBump(){
   document.getElementById('ordersToday').textContent = ordersToday;
   document.getElementById('aov').textContent = '$' + Math.round(revenue/ordersToday);
   if(typeof renderGoal === 'function') renderGoal();
-  renderLocations(fallbackLocations);
+  renderOrdersList(fallbackOrders);
   renderHealthScore(92);
 }
 
@@ -559,7 +575,7 @@ async function refreshStoreStats(){
     document.getElementById('ordersToday').textContent = ordersToday;
     document.getElementById('aov').textContent = '$' + Math.round(data.aov || 0);
     if(typeof renderGoal === 'function') renderGoal();
-    renderLocations(data.locations);
+    renderOrdersList(data.recentOrders);
     renderHealthScore(computeHealthScore(data.refundsToday, data.refundedAmount, data.revenue));
     (data.recent || []).forEach(o=>{
       const key = 'order-' + o.created;
