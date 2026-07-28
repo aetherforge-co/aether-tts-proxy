@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     const revenue = successful.reduce((sum, c) => sum + c.amount, 0) / 100;
     const orders = successful.length;
     const aov = orders ? revenue / orders : 0;
+    const refundedAmount = refunded.reduce((sum, c) => sum + c.amount, 0) / 100;
 
     const recent = successful.slice(0, 6).map(c => ({
       amount: c.amount / 100,
@@ -35,11 +36,24 @@ export default async function handler(req, res) {
       created: c.created,
     }));
 
+    // Group orders by customer location (state/region if available, else country)
+    const locationTotals = {};
+    successful.forEach(c => {
+      const addr = c.billing_details?.address;
+      const label = addr?.state || addr?.country || 'Unknown';
+      if (!locationTotals[label]) locationTotals[label] = { location: label, count: 0, revenue: 0 };
+      locationTotals[label].count += 1;
+      locationTotals[label].revenue += c.amount / 100;
+    });
+    const locations = Object.values(locationTotals).sort((a, b) => b.revenue - a.revenue).slice(0, 6);
+
     res.status(200).json({
       revenue,
       orders,
       aov,
       refundsToday: refunded.length,
+      refundedAmount,
+      locations,
       recent,
       updatedAt: new Date().toISOString(),
     });
