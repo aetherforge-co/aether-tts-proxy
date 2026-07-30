@@ -733,6 +733,7 @@ function simulateBump(){
   if(typeof renderGoal === 'function') renderGoal();
   renderOrdersList(fallbackOrders);
   renderHealthScore(92);
+  applyAlerts([{c:'warn', i:'!', t:'Store data connection unavailable — showing preview data'}]);
 }
 
 async function refreshStoreStats(){
@@ -748,7 +749,13 @@ async function refreshStoreStats(){
     document.getElementById('aov').textContent = '$' + Math.round(data.aov || 0);
     if(typeof renderGoal === 'function') renderGoal();
     renderOrdersList(data.recentOrders);
-    renderHealthScore(computeHealthScore(data.refundsToday, data.refundedAmount, data.revenue));
+    const health = computeHealthScore(data.refundsToday, data.refundedAmount, data.revenue);
+    renderHealthScore(health);
+    applyAlerts(buildRealAlerts(data, health));
+    if((data.refundsToday || 0) > lastRefundsSeen){
+      pushEntry('Refund', `${data.refundsToday - lastRefundsSeen} new refund(s) — $${(data.refundedAmount || 0).toFixed(2)} total today`);
+    }
+    lastRefundsSeen = data.refundsToday || 0;
     (data.recent || []).forEach(o=>{
       const key = 'order-' + o.created;
       if(!seenOrderKeys.has(key)){
@@ -764,15 +771,9 @@ async function refreshStoreStats(){
 refreshStoreStats();
 setInterval(refreshStoreStats, 15000);
 
-const alertPool = [
-  {c:'warn', i:'!', t:'<b>Rune Candle Set</b> stock below 10 units'},
-  {c:'info', i:'i', t:'Weekly summary ready to send'},
-  {c:'crit', i:'×', t:'2 refund requests in the last hour'},
-  {c:'warn', i:'!', t:'Checkout latency above normal on mobile'},
-  {c:'crit', i:'×', t:'Payment processor error spike detected'},
-  {c:'info', i:'i', t:'New 5-star review on <b>Aether Compass</b>'},
-];
-let currentAlerts = alertPool.slice(0,4);
+let currentAlerts = [];
+let lastAlertSignature = '';
+let lastRefundsSeen = 0;
 
 function playChime(){
   if(!settings.soundEnabled) return;
@@ -795,24 +796,36 @@ function renderAlertsList(){
     `<div class="alert-row ${a.c}"><div class="icon">${a.i}</div><div class="text">${a.t}</div></div>`
   ).join('');
 }
-renderAlertsList();
 
-function addRandomAlert(){
-  const entry = alertPool[Math.floor(Math.random()*alertPool.length)];
-  currentAlerts.unshift(entry);
-  currentAlerts = currentAlerts.slice(0,4);
-  renderAlertsList();
-  if(entry.c === 'crit') playChime();
+// Builds real alerts from actual Stripe data — refunds, health score, and connectivity —
+// instead of rotating through a canned list.
+function buildRealAlerts(data, healthScore){
+  const alerts = [];
+  if(data.refundsToday > 0){
+    alerts.push({c:'crit', i:'×', t:`${data.refundsToday} refund${data.refundsToday > 1 ? 's' : ''} today — $${(data.refundedAmount || 0).toFixed(2)} total`});
+  }
+  if(healthScore < 50){
+    alerts.push({c:'crit', i:'×', t:`Health score critical at ${healthScore}`});
+  } else if(healthScore < 80){
+    alerts.push({c:'warn', i:'!', t:`Health score elevated concern at ${healthScore}`});
+  }
+  if(!navigator.onLine){
+    alerts.push({c:'warn', i:'!', t:'Network connection lost'});
+  }
+  if(alerts.length === 0){
+    alerts.push({c:'info', i:'i', t:'All systems nominal — no active alerts'});
+  }
+  return alerts.slice(0, 4);
 }
-setTimeout(() => setInterval(addRandomAlert, 15000), 4000);
-
-const products = ['Ember Lantern','Aether Compass','Forge-Iron Ring','Rune Candle Set','Copper Flask','Obsidian Coaster Set'];
-const cities = ['Austin, TX','Denver, CO','Portland, OR','Nashville, TN','Boise, ID','Raleigh, NC'];
-const simTypes = [
-  ()=>({tag:'New Order', text:`Order placed — <b>${products[Math.floor(Math.random()*products.length)]}</b> · ${cities[Math.floor(Math.random()*cities.length)]} · $${(Math.random()*140+25).toFixed(2)}`}),
-  ()=>({tag:'System', text:`Health check complete — all services <b>nominal</b>`}),
-  ()=>({tag:'Inventory', text:`Stock synced — <b>${products[Math.floor(Math.random()*products.length)]}</b> updated`}),
-];
+function applyAlerts(newAlerts){
+  const sig = JSON.stringify(newAlerts);
+  const hasCritNow = newAlerts.some(a => a.c === 'crit');
+  currentAlerts = newAlerts;
+  renderAlertsList();
+  if(hasCritNow && sig !== lastAlertSignature) playChime();
+  lastAlertSignature = sig;
+}
+applyAlerts([{c:'info', i:'i', t:'Awaiting first data sync…'}]);
 
 const LOG_KEY = 'aether-activity-log';
 let logEntries = [];
@@ -851,12 +864,6 @@ async function pushEntry(tag, text){
   renderLog();
   await saveLog();
 }
-
-function addSimEntry(){
-  const entry = simTypes[Math.floor(Math.random()*simTypes.length)]();
-  pushEntry(entry.tag, entry.text);
-}
-setInterval(addSimEntry, 9000);
 
 setInterval(()=>{
   document.getElementById('tickOrders').textContent = Math.floor(Math.random()*5)+2;
