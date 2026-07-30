@@ -130,7 +130,7 @@ module.exports = async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: 150 },
+        generationConfig: { maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
 
