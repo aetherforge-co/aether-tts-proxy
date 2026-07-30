@@ -10,32 +10,46 @@
 const ELEVENLABS_TTS_URL = (voiceId) =>
   `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
-// A default ElevenLabs voice (Rachel). Swap this for whichever voice ID you
-// pick in your ElevenLabs dashboard — Voice Library > (voice) > copy Voice ID.
 const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
 
-// Simple in-memory rate limit per server instance. Not perfect (serverless
-// instances can multiply), but stops accidental runaway loops from burning
-// through your ElevenLabs quota. Swap for a real rate limiter later if this
-// becomes public-facing.
-const requestLog = new Map();
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 20;
-
-function isRateLimited(key) {
+const memoryRequestLog = new Map();
+function isRateLimitedMemory(key, max, windowMs) {
   const now = Date.now();
-  const timestamps = (requestLog.get(key) || []).filter(
-    (t) => now - t < RATE_LIMIT_WINDOW_MS
-  );
+  const timestamps = (memoryRequestLog.get(key) || []).filter((t) => now - t < windowMs);
   timestamps.push(now);
-  requestLog.set(key, timestamps);
-  return timestamps.length > RATE_LIMIT_MAX;
+  memoryRequestLog.set(key, timestamps);
+  return timestamps.length > max;
+}
+
+// Real distributed rate limit via Upstash Redis's REST API — falls back to
+// the in-memory limiter above if UPSTASH_REDIS_REST_URL/TOKEN aren't set.
+async function isRateLimited(key, max, windowSeconds) {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    return isRateLimitedMemory(key, max, windowSeconds * 1000);
+  }
+  try {
+    const redisKey = `ratelimit:speak:${key}`;
+    const res = await fetch(`${url}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([
+        ['INCR', redisKey],
+        ['EXPIRE', redisKey, windowSeconds, 'NX'],
+      ]),
+    });
+    const data = await res.json();
+    const count = data?.[0]?.result;
+    if (typeof count !== 'number') return isRateLimitedMemory(key, max, windowSeconds * 1000);
+    return count > max;
+  } catch (err) {
+    console.error('Upstash rate limit error, falling back to in-memory:', err);
+    return isRateLimitedMemory(key, max, windowSeconds * 1000);
+  }
 }
 
 module.exports = async function handler(req, res) {
-  // CORS is largely decorative here since the dashboard is a local file://
-  // page with no real origin — the actual gatekeeping is the shared-secret
-  // check below. This header just avoids blocking legitimate browser fetches.
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Aether-Secret');
@@ -50,18 +64,21 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // Shared-secret gate: only requests carrying the matching header get
-  // through. This is what actually keeps random strangers who find this
-  // URL from burning through your ElevenLabs quota.
+  // SECURITY: fail CLOSED, not open. If the secret isn't configured, this
+  // used to just log a warning and let every request through — meaning
+  // anyone who found the URL could burn through the ElevenLabs quota for
+  // free. Now a missing secret is treated as "not deployable" and the
+  // endpoint refuses all requests until it's set.
   const expectedSecret = process.env.AETHER_PROXY_SECRET;
-  if (expectedSecret) {
-    const providedSecret = req.headers['x-aether-secret'];
-    if (providedSecret !== expectedSecret) {
-      res.status(401).json({ error: 'Missing or invalid secret.' });
-      return;
-    }
-  } else {
-    console.warn('AETHER_PROXY_SECRET is not set — endpoint is unprotected.');
+  if (!expectedSecret) {
+    console.error('AETHER_PROXY_SECRET is not set — refusing all requests.');
+    res.status(500).json({ error: 'Server misconfigured — missing shared secret.' });
+    return;
+  }
+  const providedSecret = req.headers['x-aether-secret'];
+  if (providedSecret !== expectedSecret) {
+    res.status(401).json({ error: 'Missing or invalid secret.' });
+    return;
   }
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -75,7 +92,7 @@ module.exports = async function handler(req, res) {
     req.headers['x-forwarded-for']?.toString().split(',')[0].trim() ||
     req.socket?.remoteAddress ||
     'unknown';
-  if (isRateLimited(ip)) {
+  if (await isRateLimited(ip, 20, 60)) {
     res.status(429).json({ error: 'Too many requests — slow down.' });
     return;
   }
@@ -86,7 +103,7 @@ module.exports = async function handler(req, res) {
     res.status(400).json({ error: '"text" is required.' });
     return;
   }
-  if (text.length > 4000) {
+  if (text.length > 1000) {
     res.status(400).json({ error: 'Text is too long (max 1000 characters).' });
     return;
   }
