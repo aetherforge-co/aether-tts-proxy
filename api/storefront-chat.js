@@ -18,25 +18,50 @@ const ALLOWED_ORIGINS = [
   'https://aetherforgeco.com',
 ];
 
-const GEMINI_MODEL = 'gemini-flash-latest'; // alias — always points at Google's current stable Flash model
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = (apiKey) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-const SYSTEM_PRIMER = `You are AETHER, the shop assistant embedded on the Aetherforge storefront. Aetherforge currently runs an in-house 3D print farm (materials: PLA, PETG, ASA, Nylon-CF, resin; 0.08mm min layer height; 24-48h typical turnaround; ships from Bay 4, Unit B). A CNC metal-work line (titanium, S35VN steel, 6061 aluminum) is planned but not live yet — if asked about buying metal hardware, say it's coming soon and point them to the Metal Work section's notify signup. There is no real order-tracking system connected yet — if asked about a specific order, say so plainly and point them to the contact form. Keep answers to 1-2 short sentences, friendly and direct, no fluff — always finish your thought within that length rather than trailing off.`;
+const SYSTEM_PRIMER = `You are AETHER, the shop assistant embedded on the Aetherforge storefront. Aetherforge currently runs an in-house 3D print farm (materials: PLA, PETG, ASA, Nylon-CF, resin; 0.08mm min layer height; 24-48h typical turnaround; ships from Bay 4, Unit B). A CNC metal-work line (titanium, S35VN steel, 6061 aluminum) is planned but not live yet — if asked about buying metal hardware, say it's coming soon and point them to the Metal Work section's notify signup. There is no real order-tracking system connected yet — if asked about a specific order, say so plainly and point them to the contact form. Keep answers to 2-3 short sentences, friendly and direct, no fluff.`;
 
-// Tighter than the dashboard's limit since this is public and unauthenticated.
-const requestLog = new Map();
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 8;
-
-function isRateLimited(key) {
+// Fallback in-memory limiter — used only if Upstash isn't configured yet.
+const memoryRequestLog = new Map();
+function isRateLimitedMemory(key, max, windowMs) {
   const now = Date.now();
-  const timestamps = (requestLog.get(key) || []).filter(
-    (t) => now - t < RATE_LIMIT_WINDOW_MS
-  );
+  const timestamps = (memoryRequestLog.get(key) || []).filter((t) => now - t < windowMs);
   timestamps.push(now);
-  requestLog.set(key, timestamps);
-  return timestamps.length > RATE_LIMIT_MAX;
+  memoryRequestLog.set(key, timestamps);
+  return timestamps.length > max;
+}
+
+// Real distributed rate limit via Upstash Redis's REST API — this endpoint
+// is public and unauthenticated, so a shared-state limiter matters more
+// here than on the private dashboard proxies. Falls back to in-memory if
+// UPSTASH_REDIS_REST_URL/TOKEN aren't set.
+async function isRateLimited(key, max, windowSeconds) {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    return isRateLimitedMemory(key, max, windowSeconds * 1000);
+  }
+  try {
+    const redisKey = `ratelimit:storefront-chat:${key}`;
+    const res = await fetch(`${url}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([
+        ['INCR', redisKey],
+        ['EXPIRE', redisKey, windowSeconds, 'NX'],
+      ]),
+    });
+    const data = await res.json();
+    const count = data?.[0]?.result;
+    if (typeof count !== 'number') return isRateLimitedMemory(key, max, windowSeconds * 1000);
+    return count > max;
+  } catch (err) {
+    console.error('Upstash rate limit error, falling back to in-memory:', err);
+    return isRateLimitedMemory(key, max, windowSeconds * 1000);
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -77,7 +102,7 @@ module.exports = async function handler(req, res) {
     req.headers['x-forwarded-for']?.toString().split(',')[0].trim() ||
     req.socket?.remoteAddress ||
     'unknown';
-  if (isRateLimited(ip)) {
+  if (await isRateLimited(ip, 8, 60)) {
     res.status(429).json({ error: 'Too many requests — slow down.' });
     return;
   }
@@ -105,7 +130,7 @@ module.exports = async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: 600 },
+        generationConfig: { maxOutputTokens: 150 },
       }),
     });
 
