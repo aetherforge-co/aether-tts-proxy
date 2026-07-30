@@ -130,7 +130,12 @@ module.exports = async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } },
+        // gemini-flash-latest now resolves to Gemini 3.5 Flash, which uses
+        // thinkingLevel (not the older thinkingBudget) and can't fully
+        // disable thinking — 'low' is the minimum. maxOutputTokens raised
+        // to give that minimal thinking pass headroom without eating into
+        // the visible reply.
+        generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'low' } },
       }),
     });
 
