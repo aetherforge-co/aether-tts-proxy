@@ -107,7 +107,10 @@ module.exports = async function handler(req, res) {
     const geminiRes = await fetch(GEMINI_URL(apiKey), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents }),
+      body: JSON.stringify({
+        contents,
+        generationConfig: { maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } },
+      }),
     });
 
     const data = await geminiRes.json();
