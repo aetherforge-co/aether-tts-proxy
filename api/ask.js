@@ -5,7 +5,7 @@
 // environment variable (GEMINI_API_KEY) — it is never sent to or visible
 // from the browser. Same secret-gate pattern as /api/speak.
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-flash-latest'; // alias — always points at Google's current stable Flash model
 const GEMINI_URL = (apiKey) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
